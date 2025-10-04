@@ -1,0 +1,7 @@
+pandas
+langchain
+langgraph
+yfinance
+newsapi-python
+fredapi
+google-generativeai
