@@ -1,6 +1,5 @@
 import json
 import os
-import google.generativeai as genai
 from agents.toolbox_agent import ToolboxAgent
 from agents.planning_agent import PlanningAgent
 from agents.memory_agent import MemoryAgent
@@ -12,9 +11,8 @@ from utils.utils import load_env
 def run_analysis(symbol: str):
     """Runs the full agentic analysis for a given stock symbol."""
     
-    # Load API keys and configure Gemini
+    # Load API keys 
     load_env()
-    genai.configure(api_key=os.environ.get('GOOGLE_API_KEY'))
 
     # 1. Initialize Agents
     toolbox = ToolboxAgent()

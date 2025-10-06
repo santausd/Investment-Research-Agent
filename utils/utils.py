@@ -10,7 +10,8 @@ def load_env(filepath="config/aai_520_proj.config"):
                 line = line.strip()
                 if line and not line.startswith('#'):
                     key, value = line.split('=', 1)
-                    os.environ[key] = value
+                    if key not in os.environ or not os.environ[key]: 
+                        os.environ[key] = value
         print(f"Environment variables loaded from {filepath}")
     except FileNotFoundError:
         print(f"Error: Config file not found at {filepath}. Make sure it is in the project config directory.")
