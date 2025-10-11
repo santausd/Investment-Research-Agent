@@ -103,9 +103,14 @@ def run_analysis(symbol: str):
         # A more robust implementation would extract key metrics from the thesis
         memory.update(symbol, {"summary": state["final_thesis"]})
 
-    print(f"\n--- Completed Analysis for {symbol} ---")
-    print("Final Thesis:")
-    print(state["final_thesis"])
+        print(f"\n--- Completed Analysis for {symbol} ---")
+        print("Final Thesis:")
+        print(state["final_thesis"])
+    
+        return state["final_thesis"]
 
+    return f"No summary generated for the symbol: {symbol}"
+
+	
 if __name__ == '__main__':
     run_analysis('NVDA')

@@ -6,3 +6,5 @@ newsapi-python
 fredapi
 google-generativeai
 sec_api
+streamlit
+requests
