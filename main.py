@@ -53,13 +53,16 @@ def run_analysis(symbol: str):
 
     # The sequence then calls the Toolbox Agent multiple times
     for step in state["plan"]:
-        if "yfinance" in step.lower():
+        if ("assessment" in step.lower() or "analysis" in step.lower()) and 'yfinance' not in state["raw_data"]:
             state["raw_data"]['yfinance'] = toolbox.fetch('yfinance', symbol)
-        elif "news" in step.lower():
+        if ("news" in step.lower() or "finding" in step.lower() or "analysis" in step.lower()) and 'news' not in state["raw_data"]:
             state["raw_data"]['news'] = toolbox.fetch('newsapi', symbol)
-        elif "economic" in step.lower() or "fred" in step.lower():
+        if ("economic" in step.lower() or "advancements" in step.lower()) and 'fred_gdp' not in state["raw_data"]:
             # A more robust implementation would parse the indicator
             state["raw_data"]['fred_gdp'] = toolbox.fetch('fred', 'GDP')
+        if ("valuation" in step.lower() or "risk" in step.lower() or "report" in step.lower()) and "secEdgar" not in state["raw_data"]:
+            # A more robust implementation would parse the indicator
+            state["raw_data"]['secEdgar'] = toolbox.fetch('secEdgar', symbol)
 
     print("\n--- Fetched Raw Data ---")
     # Abridged printing for brevity
@@ -69,9 +72,11 @@ def run_analysis(symbol: str):
         print("  - News data retrieved.")
     if 'fred_gdp' in state["raw_data"]:
         print("  - FRED GDP data retrieved.")
+    if 'secEdgar' in state["raw_data"]:
+        print("  - Sec Edgar data retrieved.")
 
     # Toolbox Output -> Prompt Chaining Agent -> Routing Agent
-    if 'news' in state["raw_data"] and state["raw_data"]['news']['articles']:
+    if 'news' in state["raw_data"] and state["raw_data"]['news']!=None and state["raw_data"]['news']['articles']:
         for article in state["raw_data"]['news']['articles']:
             processed_article = prompt_chainer.run(article['title'] + "\n" + article.get('description', ''))
             state["processed_news"].append(processed_article)
