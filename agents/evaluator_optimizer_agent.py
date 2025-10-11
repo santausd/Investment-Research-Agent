@@ -1,5 +1,5 @@
 import os
-from utils.llm_integration import call_gemini
+from utils.llm_integration import call_llm
 
 class EvaluatorOptimizerAgent:
     def __init__(self):
@@ -11,7 +11,7 @@ class EvaluatorOptimizerAgent:
         # 1. Optimizer (Drafting)
         draft_prompt = "Generate a comprehensive draft investment analysis and thesis (Buy/Hold/Sell) based on the following data." 
         draft_prompt += f"\n\nData:\n{data}"
-        draft = call_gemini("You are a financial analyst drafting an investment thesis.", draft_prompt, json_output=False)
+        draft = call_llm("You are a financial analyst drafting an investment thesis.", draft_prompt, json_output=False)
         
         if not draft:
             return "Failed to generate a draft."
@@ -27,7 +27,7 @@ class EvaluatorOptimizerAgent:
             "Provide a specific suggestion for refinement."
         )
         evaluator_prompt += f"\n\nDraft:\n{draft}"
-        critique = call_gemini("You are a meticulous financial evaluator.", evaluator_prompt, json_output=False)
+        critique = call_llm("You are a meticulous financial evaluator.", evaluator_prompt, json_output=False)
 
         if not critique:
             return "Failed to generate a critique."
@@ -41,7 +41,7 @@ class EvaluatorOptimizerAgent:
             "Produce the final, polished investment thesis."
         )
         refinement_prompt += f"\n\nInitial Draft:\n{draft}\n\nCritique:\n{critique}"
-        final_thesis = call_gemini("You are a financial analyst refining your work.", refinement_prompt, json_output=False)
+        final_thesis = call_llm("You are a financial analyst refining your work.", refinement_prompt, json_output=False)
 
         if not final_thesis:
             return "Failed to generate the final thesis."

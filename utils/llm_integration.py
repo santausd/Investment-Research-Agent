@@ -1,42 +1,37 @@
 import os
 import json
 import re
-#import google.generativeai as genai
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-'''
-def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = True) -> dict | str:
-    """
-    Calls the Gemini API with a system instruction and user prompt.
+# Toggle this to False to use GeminiGenAI (if available)
+USE_OLLAMA = False
 
-    Args:
-        system_instruction: The system instruction for the model.
-        user_prompt: The user's prompt.
-        json_output: Whether to expect a JSON output from the model.
+# Model names / env fallback
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL_NAME', 'llama2')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL_NAME', 'gemini-2.5-flash')
+NEWS_API_KEY = os.getenv('NEWS_API_KEY', '')
 
-    Returns:
-        A dictionary if json_output is True, otherwise a string.
-    """
-    model = genai.GenerativeModel(
-        model_name=os.environ.get('GEMINI_MODEL_NAME'),
-        generation_config={"response_mime_type": "application/json"} if json_output else None
-    )
-    
-    prompt = f"{system_instruction}\n\n{user_prompt}"
-
+def get_llm():
+    """Return an LLM instance. Attempts to return an Ollama LLM if USE_OLLAMA=True,
+    otherwise falls back to Gemini GenAI Chat wrapper. Returns None if no client is available."""
+    if USE_OLLAMA:
+        try:
+            from langchain_ollama import OllamaLLM
+            return OllamaLLM(model=OLLAMA_MODEL)
+        except Exception as e:
+            print(f"Failed to load Ollama model ({OLLAMA_MODEL}): {e}")
+            print("Falling back to Gemini...\n")
+            pass
     try:
-        response = model.generate_content(prompt)
-        if json_output:
-            return json.loads(response.text)
-        return response.text
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(model=GEMINI_MODEL)
     except Exception as e:
-        print(f"An error occurred in call_gemini: {e}")
+        print(f"Failed to initialize Gemini: {e}")
         return None
-'''
 
-def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = True, retry: bool = True) -> dict | list | str:
+
+def call_llm(system_instruction: str, user_prompt: str, json_output: bool = True, retry: bool = True) -> dict | list | str:
     """
-    Calls Gemini via LangChain with a system instruction and user prompt.
+    Calls LLM via LangChain with a system instruction and user prompt.
 
     Args:
         system_instruction: The system instruction for the model.
@@ -49,18 +44,19 @@ def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = T
         otherwise raw text (str).
     """
     try:
-        api_key = os.environ.get("GOOGLE_API_KEY")
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY is not set in environment variables.")
-
-        model_name = os.environ.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
-
-        llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.7)
-
+        llm = get_llm() 
+        
         full_prompt = f"System: {system_instruction}\nUser: {user_prompt}"
         response = llm.invoke(full_prompt)
-        text = response.content.strip()
 
+        # Handle both LangChain AIMessage and plain string responses
+        if hasattr(response, "content"):
+            text = response.content.strip()
+        elif isinstance(response, str):
+            text = response.strip()
+        else:
+            raise TypeError(f"Unexpected response type: {type(response)}")
+    
         # Helper function: extract first valid JSON object or array
         def extract_json(text: str):
             patterns = [r"(\{.*?\})", r"(\[.*?\])"]  # non-greedy
@@ -80,8 +76,17 @@ def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = T
             elif retry:
                 # Retry once with stricter instruction
                 retry_prompt = full_prompt + "\nReturn strictly valid JSON ONLY, no explanations."
-                retry_response = llm.invoke(retry_prompt).content.strip()
-                parsed = extract_json(retry_response)
+                retry_response = llm.invoke(retry_prompt)
+
+                # Handle both LangChain AIMessage and plain string responses
+                if hasattr(retry_response, "content"):
+                    text = response.content.strip()
+                elif isinstance(retry_response, str):
+                    text = response.strip()
+                else:
+                    raise TypeError(f"Unexpected response type: {type(retry_response)}")
+    
+                parsed = extract_json(text)
                 if parsed is not None:
                     return parsed
                 else:
@@ -94,6 +99,5 @@ def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = T
         return text
 
     except Exception as e:
-        print(f"An error occurred in call_gemini: {e}")
+        print(f"An error occurred in call_llm: {e}")
         return None
-
