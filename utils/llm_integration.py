@@ -15,7 +15,7 @@ def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = T
         A dictionary if json_output is True, otherwise a string.
     """
 
-    print(os.environ.get('GOOGLE_API_KEY'), os.environ.get('GEMINI_MODEL_NAME'))
+    #print(os.environ.get('GOOGLE_API_KEY'), os.environ.get('GEMINI_MODEL_NAME'))
 
     genai.configure(
         api_key=os.environ.get('GOOGLE_API_KEY'),
