@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from utils.logger_config import logger
 
 class MemoryAgent:
     def __init__(self, db_path='memory_db.json'):
@@ -21,16 +22,11 @@ class MemoryAgent:
         """Retrieves the memory for a given symbol."""
         return self.memory.get(symbol)
 
-    def update(self, symbol: str, final_analysis: dict):
-        """Updates the memory for a given symbol."""
-        if symbol not in self.memory:
-            self.memory[symbol] = {}
-        
-        # For simplicity, we'll just store the summary and key metrics
+    def update(self, symbol: str, analysis_state: dict):
+        """Updates the memory for a given symbol with the entire analysis state."""
         self.memory[symbol] = {
-            'summary': final_analysis.get('summary', ''),
-            'key_metrics': final_analysis.get('key_metrics', {}),
+            'state': analysis_state,
             'date': datetime.now().isoformat()
         }
         self._save_memory()
-        print(f"Memory updated for {symbol}")
+        logger.info(f"Memory updated for {symbol}")
