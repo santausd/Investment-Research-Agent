@@ -1,6 +1,7 @@
 import os
 import json
 import google.generativeai as genai
+from utils.logger_config import logger
 
 def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = True) -> dict | str:
     """
@@ -15,7 +16,7 @@ def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = T
         A dictionary if json_output is True, otherwise a string.
     """
 
-    #print(os.environ.get('GOOGLE_API_KEY'), os.environ.get('GEMINI_MODEL_NAME'))
+    logger.debug(f"Model Name: {os.environ.get('GEMINI_MODEL_NAME')}")
 
     genai.configure(
         api_key=os.environ.get('GOOGLE_API_KEY'),
@@ -34,5 +35,5 @@ def call_gemini(system_instruction: str, user_prompt: str, json_output: bool = T
             return json.loads(response.text)
         return response.text
     except Exception as e:
-        print(f"An error occurred in call_gemini: {e}")
+        logger.error(f"An error occurred in call_gemini: {e}")
         return None
