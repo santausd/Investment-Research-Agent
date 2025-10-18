@@ -8,6 +8,7 @@ from agents.evaluator_optimizer_agent import EvaluatorOptimizerAgent
 from agents.prompt_chaining_agent import PromptChainingAgent
 from agents.routing_agent import RoutingAgent
 from utils.utils import load_env
+from utils.logger_config import logger
 
 def run_analysis(symbol: str):
     """Runs the full agentic analysis for a given stock symbol."""
@@ -33,84 +34,91 @@ def run_analysis(symbol: str):
         "final_thesis": None
     }
 
-    print(f"--- Starting Analysis for {symbol} ---")
+    logger.info(f"--- Starting Analysis for {symbol} ---")
 
     # 3. Establish Flow
     # Input Symbol -> Memory Agent -> Planning Engine Agent
     retrieved_memory = memory.retrieve(symbol)
     if retrieved_memory:
-        print(f"\n--- Retrieved Memory for {symbol} ---")
-        print(json.dumps(retrieved_memory, indent=4))
+        logger.info(f"--- Retrieved Memory for {symbol} ---")
+        logger.debug(json.dumps(retrieved_memory, indent=4))
     
     state["plan"] = planner.generate_plan(symbol, json.dumps(retrieved_memory) if retrieved_memory else None)
     if not state["plan"]:
-        print("Could not generate a plan. Exiting.")
+        logger.error("Could not generate a plan. Exiting.")
         return
 
-    print(f"\n--- Generated Plan for {symbol} ---")
+    logger.info(f"--- Generated Plan for {symbol} ---")
+    logger.debug(json.dumps(state["plan"], indent=4))
+
+    # 4. Execute the structured plan
+    logger.info("--- Executing Plan ---")
     for step in state["plan"]:
-        print(f"- {step}")
+        tool = step.get("tool")
+        params = step.get("parameters", {})
+        
+        if not tool:
+            logger.warning(f"Skipping invalid step: {step}")
+            continue
 
-    # The sequence then calls the Toolbox Agent multiple times
-    for step in state["plan"]:
-        if ("assessment" in step.lower() or "analysis" in step.lower()) and 'yfinance' not in state["raw_data"]:
-            state["raw_data"]['yfinance'] = toolbox.fetch('yfinance', symbol)
-        if ("news" in step.lower() or "finding" in step.lower() or "analysis" in step.lower()) and 'news' not in state["raw_data"]:
-            state["raw_data"]['news'] = toolbox.fetch('newsapi', symbol)
-        if ("economic" in step.lower() or "advancements" in step.lower()) and 'fred_gdp' not in state["raw_data"]:
-            # A more robust implementation would parse the indicator
-            state["raw_data"]['fred_gdp'] = toolbox.fetch('fred', 'GDP')
-        if ("valuation" in step.lower() or "risk" in step.lower() or "report" in step.lower()) and "secEdgar" not in state["raw_data"]:
-            # A more robust implementation would parse the indicator
-            state["raw_data"]['secEdgar'] = toolbox.fetch('secEdgar', symbol)
+        logger.info(f"--> Executing: {tool} with params: {params}")
 
-    print("\n--- Fetched Raw Data ---")
-    # Abridged printing for brevity
-    if 'yfinance' in state["raw_data"]:
-        print("  - Yahoo Finance data retrieved.")
-    if 'news' in state["raw_data"]:
-        print("  - News data retrieved.")
-    if 'fred_gdp' in state["raw_data"]:
-        print("  - FRED GDP data retrieved.")
-    if 'secEdgar' in state["raw_data"]:
-        print("  - Sec Edgar data retrieved.")
-
-    # Toolbox Output -> Prompt Chaining Agent -> Routing Agent
-    if 'news' in state["raw_data"] and state["raw_data"]['news']!=None and state["raw_data"]['news']['articles']:
-        for article in state["raw_data"]['news']['articles']:
-            processed_article = prompt_chainer.run(article['title'] + "\n" + article.get('description', ''))
-            state["processed_news"].append(processed_article)
+        result = None
+        if tool in ['yfinance', 'newsapi', 'fred', 'secEdgar']:
+            # Add symbol to params if not present for relevant tools
+            if tool in ['yfinance', 'newsapi', 'secEdgar'] and 'symbol' not in params:
+                params['symbol'] = symbol
             
-            route = router.route(processed_article.get('classification', ''))
-            print(f"\n--- Routing for article: '{article['title']}' ---")
-            print(f"  - Classification: {processed_article.get('classification')}")
-            print(f"  - Route: {route}")
-
-            # Routing -> Execution of Specialized Model (Placeholder)
-            if route == 'EarningsModelRun':
-                print("  - (Placeholder) Would run a discounted cash flow model here.")
-            elif route == 'ComplianceCheck':
-                print("  - (Placeholder) Would run a regulatory impact model here.")
+            result = toolbox.fetch(tool, **params)
+            state["raw_data"][tool] = result
+            if result:
+                logger.info(f"  - SUCCESS: Data retrieved with tool '{tool}'.")
             else:
-                print("  - (Placeholder) Would run a general analysis model here.")
+                logger.error(f"  - FAILED: Tool '{tool}' did not return data.")
+        
+        elif tool == 'prompt_chaining':
+            # This tool processes news articles. We need to find them in raw_data.
+            news_data = state["raw_data"].get('newsapi')
+            if news_data and news_data.get('articles'):
+                for article in news_data['articles']:
+                    processed_article = prompt_chainer.run(article['title'] + "\n" + article.get('description', ''))
+                    state["processed_news"].append(processed_article)
+                    
+                    # The routing logic is coupled with prompt chaining for now
+                    route = router.route(processed_article.get('classification', ''))
+                    logger.info(f"  --- Routing for article: \"{article['title']}\" ---")
+                    logger.debug(f"    - Classification: {processed_article.get('classification')}")
+                    logger.debug(f"    - Route: {route}")
+                    # Placeholder execution
+                    if route == 'EarningsModelRun':
+                        logger.info("    - (Placeholder) Would run a discounted cash flow model here.")
+                    elif route == 'ComplianceCheck':
+                        logger.info("    - (Placeholder) Would run a regulatory impact model here.")
+                    else:
+                        logger.info("    - (Placeholder) Would run a general analysis model here.")
+            else:
+                logger.warning("  - SKIPPING: News data not available for prompt_chaining.")
 
-    # All data -> Evaluator–Optimizer Agent
-    print("\n--- Generating Final Thesis with Evaluator-Optimizer ---")
-    state["final_thesis"] = evaluator.run(state)
+        elif tool == 'evaluator':
+            logger.info("  --- Generating Final Thesis with Evaluator-Optimizer ---")
+            result = evaluator.run(state, state['symbol'])
+            state["final_thesis"] = result
+        
+        else:
+            logger.warning(f"  - WARNING: Tool '{tool}' not recognized in execution loop.")
 
-    # Evaluator–Optimizer Output -> Memory Agent (Update)
+    # 5. Update Memory and Final Output
+    logger.info("--- Finalizing Analysis ---")
     if state["final_thesis"]:
-        # A more robust implementation would extract key metrics from the thesis
-        memory.update(symbol, {"summary": state["final_thesis"]})
+        memory.update(symbol, state)
 
-        print(f"\n--- Completed Analysis for {symbol} ---")
-        print("Final Thesis:")
-        print(state["final_thesis"])
-    
-        return state["final_thesis"]
+    logger.warning(f"--- Completed Analysis for {symbol} ---")
+    logger.warning("Final Thesis:")
+    logger.warning(state["final_thesis"])
 
-    return f"No summary generated for the symbol: {symbol}"
-
-	
 if __name__ == '__main__':
+    #agent = ToolboxAgent()
+    #symbol = "NVDA"
+    #result = agent.get_yahoo_finance_data(symbol)
+    #print (result)
     run_analysis('NVDA')
