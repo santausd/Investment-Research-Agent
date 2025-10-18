@@ -1,4 +1,6 @@
 import os
+from utils.logger_config import logger
+
 def load_env(filepath="config/aai_520_proj.config"):
     """
     Loads environment variables from the aai_520_project.config.
@@ -11,8 +13,8 @@ def load_env(filepath="config/aai_520_proj.config"):
                 if line and not line.startswith('#'):
                     key, value = line.split('=', 1)
                     os.environ[key] = value
-        print(f"Environment variables loaded from {filepath}")
+        logger.info(f"Environment variables loaded from {filepath}")
     except FileNotFoundError:
-        print(f"Error: Config file not found at {filepath}. Make sure it is in the project config directory.")
+        logger.error(f"Error: Config file not found at {filepath}. Make sure it is in the project config directory.")
     except Exception as e:
-        print(f"Error loading environment variables from {filepath}: {e}")
+        logger.error(f"Error loading environment variables from {filepath}: {e}")
