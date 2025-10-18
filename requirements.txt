@@ -1,6 +1,7 @@
 pandas
 langchain
 langgraph
+ollama
 yfinance
 newsapi-python
 fredapi
@@ -8,3 +9,6 @@ google-generativeai
 sec_api
 streamlit
 requests
+openai
+scikit-learn
+sentence_transformers
