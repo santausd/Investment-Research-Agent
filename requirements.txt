@@ -1,4 +1,6 @@
 pandas
+numpy
+faiss-cpu
 langchain
 langgraph
 yfinance
@@ -6,5 +8,6 @@ newsapi-python
 fredapi
 google-generativeai
 sec_api
-streamlit
-requests
+diskcache
+sentence-transformers
+langchain-text-splitters
