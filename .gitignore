@@ -1,3 +1,7 @@
 # Ignore files
 config/aai_520_proj.config
 memory_db.json
+
+# Ignore folders
+__pycache__
+*/__pycache__
