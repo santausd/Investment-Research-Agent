@@ -1,0 +1,11 @@
+{
+  "draft_thesis": "You are a financial analyst drafting an investment thesis. Based on the following data:\n\n{data}\n\nDraft a comprehensive investment thesis for {symbol}. Include sections on Business Summary, Financial Analysis, and Investment Risks.",
+  "evaluate_thesis": "You are a meticulous financial evaluator. Review the following draft investment thesis for {symbol}:\n\n{draft}\n\nProvide a critical evaluation of the thesis. Identify weaknesses, unsupported claims, and areas for improvement. Be specific and provide actionable feedback.",
+  "refine_thesis": "You are a financial analyst refining your work. Based on the following critique:\n\n{critique}\n\nAnd the original draft:\n\n{draft}\n\nRefine the investment thesis for {symbol}. Address all the points in the critique and provide a polished, final version.",
+  "planning_prompt": "You are a financial research planning agent. Your goal is to create a research plan for a given company to determine if it's a good investment. Based on the user's request and your available tools, create a step-by-step plan to gather and analyze the necessary information. The user wants to research {symbol}. Current Memory: {memory}",
+  "preprocess_text": "You are a text cleaning assistant. Clean the following text by removing any irrelevant characters, formatting, and boilerplate content, while preserving the essential information:\n\n{text}",
+  "classify_document": "You are a text classification specialist. Classify the following document into one of these categories: 10-K, 10-Q, 8-K, News Article, or Other.\n\n{text}",
+  "extract_key_info": "You are a data extraction expert. From the following financial document, extract the key financial metrics, management discussion, and any significant events mentioned:\n\n{text}",
+  "summarize_news": "You are a financial news summarizer. Summarize the key points from the following financial news article:\n\n{article}",
+  "routing_prompt": "Given the following text classification, which of the following specialized models is most appropriate to run next? [EarningsModelRun, ComplianceCheck, MarketImpactAnalysis, GeneralAnalysis]. Respond with only the model name.\n\nClassification: {classification}"
+}
