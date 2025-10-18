@@ -5,160 +5,146 @@ from newsapi import NewsApiClient
 from fredapi import Fred
 from sec_api import QueryApi
 import requests
+import diskcache
+from pathlib import Path
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from utils.logger_config import logger
+
+# Setup a cache directory in the project root
+cache_dir = Path(__file__).parent.parent / 'cache'
+cache = diskcache.Cache(str(cache_dir))
 
 class ToolboxAgent:
     def __init__(self):
-        self.cache = {}
-        self.newsapi = NewsApiClient(api_key=os.environ.get('NEWS_API_KEY'))
-        self.fred = Fred(api_key=os.environ.get('FRED_API_KEY'))
-        self.sec = QueryApi(api_key=os.environ.get('SEC_API_KEY'))
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=128)
+        self.indices = {}
+        self.documents = {}
 
-    def _is_cache_valid(self, symbol, tool_name):
-        if symbol in self.cache and tool_name in self.cache[symbol]:
-            timestamp = self.cache[symbol][tool_name]['timestamp']
-            if datetime.now() - timestamp < timedelta(hours=24):
-                return True
-        return False
-
+    @cache.memoize(expire=86400, ignore={0}) # Cache for 24 hours, ignore self
     def get_yahoo_finance_data(self, symbol: str) -> dict:
         """Fetches price, P/E, and fundamental metrics from Yahoo Finance."""
-        tool_name = 'yfinance'
-        if self._is_cache_valid(symbol, tool_name):
-            print(f"Returning cached data for {symbol} from {tool_name}")
-            return self.cache[symbol][tool_name]['data']
-
+        logger.info(f"Fetching data for {symbol} from yfinance (cache miss or expired)")
         try:
-            print(f"Fetching data for {symbol} from {tool_name}")
             ticker = yf.Ticker(symbol)
-            info = ticker.info
-            
-            if symbol not in self.cache:
-                self.cache[symbol] = {}
-            self.cache[symbol][tool_name] = {
-                'timestamp': datetime.now(),
-                'data': info
-            }
-            
-            return info
+            return ticker.info
         except Exception as e:
-            print(f"An error occurred with yfinance for symbol {symbol}: {e}")
+            logger.error(f"An error occurred with yfinance for symbol {symbol}: {e}")
             return None
 
+    @cache.memoize(expire=86400, ignore={0}) # Cache for 24 hours, ignore self
     def get_financial_news(self, symbol: str) -> dict:
         """Fetches financial news for a given symbol."""
-        tool_name = 'newsapi'
-        # print(os.environ.get('NEWS_API_KEY'))
-        if self._is_cache_valid(symbol, tool_name):
-            print(f"Returning cached news for {symbol}")
-            return self.cache[symbol][tool_name]['data']
-
+        logger.info(f"Fetching news for {symbol} from newsapi (cache miss or expired)")
         try:
-            print(f"Fetching news for {symbol}")
-            all_articles = self.newsapi.get_everything(q=symbol,
+            newsapi = NewsApiClient(api_key=os.environ.get('NEWS_API_KEY'))
+            all_articles = newsapi.get_everything(q=symbol,
                                                       language='en',
                                                       sort_by='relevancy',
                                                       page_size=5)
-            
-            if symbol not in self.cache:
-                self.cache[symbol] = {}
-            self.cache[symbol][tool_name] = {
-                'timestamp': datetime.now(),
-                'data': all_articles
-            }
             return all_articles
         except Exception as e:
-            print(f"An error occurred with NewsAPI for symbol {symbol}: {e}")
+            logger.error(f"An error occurred with NewsAPI for symbol {symbol}: {e}")
             return None
 
+    @cache.memoize(expire=86400, ignore={0}) # Cache for 24 hours, ignore self
     def get_economic_data(self, indicator: str) -> dict:
         """Fetches economic data from FRED."""
-        tool_name = 'fred'
-        if self._is_cache_valid(indicator, tool_name):
-            print(f"Returning cached data for {indicator} from {tool_name}")
-            return self.cache[indicator][tool_name]['data']
-
+        logger.info(f"Fetching data for {indicator} from FRED (cache miss or expired)")
         try:
-            print(f"Fetching data for {indicator} from {tool_name}")
-            data = self.fred.get_series(indicator)
-            
-            if indicator not in self.cache:
-                self.cache[indicator] = {}
-            self.cache[indicator][tool_name] = {
-                'timestamp': datetime.now(),
-                'data': data.to_dict()
-            }
+            fred = Fred(api_key=os.environ.get('FRED_API_KEY'))
+            data = fred.get_series(indicator)
             return data.to_dict()
         except Exception as e:
-            print(f"An error occurred with FRED for indicator {indicator}: {e}")
+            logger.error(f"An error occurred with FRED for indicator {indicator}: {e}")
             return None
         
-    def get_filing_data(self, indicator: str) -> dict:
-        """Fetches Filings data from Sec Edgar."""
-        tool_name = 'secEdgar'
+    @cache.memoize(expire=86400, ignore={0}) # Cache for 24 hours, ignore self
+    def get_filing_data(self, symbol: str) -> dict:
+        """Fetches filings from SEC Edgar, processes them, and stores them in a FAISS index."""
+        logger.info(f"Fetching and processing filing data for {symbol} from Sec Edgar.")
         query = {
-            "query": (
-                f'(formType:"10-K" OR formType:"10-Q" OR formType:"8-K" OR formType:"SC 13D" OR formType:"SC 13G")'
-                f' AND ticker:{indicator}'
-            ),
-            "from": 0,
-            "size": 4,
+            "query": { "query_string": {
+                "query": f"ticker:{symbol} AND (formType:\"10-K\" OR formType:\"10-Q\")",
+                "time_zone": "America/New_York"
+            }},
+            "from": "0",
+            "size": "5",
             "sort": [{ "filedAt": { "order": "desc" }}]
         }
-        print(query)
-
-        if self._is_cache_valid(indicator, tool_name):
-            print(f"Returning cached data for {indicator} from {tool_name}")
-            return self.cache[indicator][tool_name]['data']
 
         try:
-            print(f"Fetching data for {indicator} from {tool_name}")
-            data = self.sec.get_filings(query)["filings"]
-            
-            filingDataRaw = {}
-            for filing in data:
-                folder_path = "..\\utils\\filingDocuments\\"+(indicator)
-                os.makedirs(folder_path, exist_ok=True)
-                form_type = filing["formType"].replace("/", "-")
-                description = filing["description"].replace("/", "-")
-                
-                fileType = {}
-                for doc in filing["documentFormatFiles"]:
+            sec = QueryApi(api_key=os.environ.get('SEC_API_KEY'))
+            filings = sec.get_filings(query)["filings"]
+            if not filings:
+                logger.warning("No filings found.")
+                return {"status": "No filings found."}
 
-                    typ = doc["documentUrl"][-4:]
-                    if doc["documentUrl"].endswith(".txt") or doc["documentUrl"].endswith(".htm"):
-                        response = requests.get(doc["documentUrl"])
-                        file_path = os.path.join(folder_path, f"{form_type}-{description}{typ}")
-                        with open(file_path, "wb") as f:
-                            f.write(response.content)
-                        filingDataRaw[form_type+"-"+description] = response.content.decode("utf-8")
-                    else:
-                        if(typ not in fileType):
-                            fileType[typ] = 0
-                        fileType[typ] += 1
-
+            all_chunks = []
+            for filing in filings:
+                doc_url = filing['linkToTxt']
+                logger.info(f"  - Processing filing: {filing['formType']} from {doc_url}")
                 
+                try:
+                    response = requests.get(doc_url)
+                    response.raise_for_status()
+                    raw_text = response.text
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"    - Could not download filing content: {e}")
+                    continue
+
+                chunks = self.text_splitter.split_text(raw_text)
+                all_chunks.extend(chunks)
+
+            if not all_chunks:
+                logger.warning("No content to process.")
+                return {"status": "No content to process."}
+
+            embeddings = self.embedding_model.encode(all_chunks)
+            embedding_dim = embeddings.shape[1]
+            index = faiss.IndexFlatL2(embedding_dim)
+            index.add(np.array(embeddings, dtype=np.float32))
             
-            if indicator not in self.cache:
-                self.cache[indicator] = {}
-            self.cache[indicator][tool_name] = {
-                'timestamp': datetime.now(),
-                'data': filingDataRaw
-            }
-            return filingDataRaw
+            self.indices[symbol] = index
+            self.documents[symbol] = all_chunks
+
+            return {"status": f"Successfully processed and stored {len(filings)} filings."}
         except Exception as e:
-            print(f"An error occurred with Sec Edgar for indicator {indicator}: {e}")
+            logger.error(f"An error occurred with Sec Edgar processing for symbol {symbol}: {e}")
             return None
 
-    def fetch(self, tool_name: str, symbol: str) -> dict:
+    def query_sec_filings(self, query: str, symbol: str) -> list:
+        """Queries the vectorized SEC filings for a given symbol."""
+        if symbol not in self.indices:
+            logger.warning("No SEC filings have been processed for this symbol yet.")
+            return ["No SEC filings have been processed for this symbol yet."]
+
+        index = self.indices[symbol]
+        documents = self.documents[symbol]
+        
+        query_embedding = self.embedding_model.encode([query])
+        distances, indices = index.search(np.array(query_embedding, dtype=np.float32), k=5)
+        
+        results = [documents[i] for i in indices[0]]
+        return results
+
+    def fetch(self, tool_name: str, **kwargs) -> dict:
         """Dynamically dispatches to the correct tool wrapper."""
+        logger.info(f"Dispatching to tool: {tool_name} with params: {kwargs}")
         if tool_name == 'yfinance':
-            return self.get_yahoo_finance_data(symbol)
+            return self.get_yahoo_finance_data(symbol=kwargs.get('symbol'))
         elif tool_name == 'newsapi':
-            return self.get_financial_news(symbol)
+            return self.get_financial_news(symbol=kwargs.get('symbol'))
         elif tool_name == 'fred':
-            return self.get_economic_data(symbol)
+            return self.get_economic_data(indicator=kwargs.get('indicator'))
         elif tool_name == 'secEdgar':
-            return self.get_filing_data(symbol)
+            return self.get_filing_data(symbol=kwargs.get('symbol'))
+        elif tool_name == 'query_sec_filings':
+            return self.query_sec_filings(query=kwargs.get('query'), symbol=kwargs.get('symbol'))
         else:
-            print(f"Tool {tool_name} not recognized.")
+            logger.warning(f"Tool {tool_name} not recognized.")
             return None
+
