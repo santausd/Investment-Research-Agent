@@ -1,0 +1,3 @@
+# Ignore files
+config/aai_520_proj.config
+memory_db.json
