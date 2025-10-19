@@ -1,7 +1,7 @@
 import os
-from utils.llm_integration import call_gemini
+import logging
+from utils.llm_integration import call_gemini, call_judge_gemini
 from utils.prompt_manager import PromptManager
-from utils.logger_config import logger
 
 class EvaluatorOptimizerAgent:
     def __init__(self):
@@ -15,32 +15,29 @@ class EvaluatorOptimizerAgent:
         draft = call_gemini("You are a financial analyst drafting an investment thesis.", draft_prompt, json_output=False)
         
         if not draft:
-            logger.error("Failed to generate a draft.")
             return "Failed to generate a draft."
 
-        logger.info("--- Initial Draft ---")
-        logger.debug(draft)
+        logging.info("\n--- Initial Draft ---")
+        logging.info(draft)
 
         # 2. Evaluator (Critique)
         evaluator_prompt = self.prompt_manager.get_prompt('evaluate_thesis', draft=draft, symbol=symbol)
-        critique = call_gemini("You are a meticulous financial evaluator.", evaluator_prompt, json_output=False)
+        critique = call_judge_gemini("You are a meticulous financial evaluator.", evaluator_prompt, json_output=False)
 
         if not critique:
-            logger.error("Failed to generate a critique.")
             return "Failed to generate a critique."
 
-        logger.info("--- Critique ---")
-        logger.debug(critique)
+        logging.info("\n--- Critique ---")
+        logging.info(critique)
 
         # 3. Optimizer (Refinement)
         refinement_prompt = self.prompt_manager.get_prompt('refine_thesis', draft=draft, critique=critique, symbol=symbol)
         final_thesis = call_gemini("You are a financial analyst refining your work.", refinement_prompt, json_output=False)
 
         if not final_thesis:
-            logger.error("Failed to generate the final thesis.")
             return "Failed to generate the final thesis."
 
-        logger.info("--- Final Thesis ---")
-        logger.debug(final_thesis)
+        logging.info("\n--- Final Thesis ---")
+        logging.info(final_thesis)
 
         return final_thesis
