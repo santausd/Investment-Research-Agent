@@ -133,7 +133,7 @@ def run_analysis(symbol: str):
 
     # Basic heuristic parsing of scores from LLM text
     eval_text = eval_result.get("raw", "")
-    clarity = factual = rigor = overall = 0
+    clarity = accuracy = rigor = overall = 0
 
     # Regex patterns to extract scores
     patterns = {
