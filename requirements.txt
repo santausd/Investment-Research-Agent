@@ -11,3 +11,5 @@ sec_api
 diskcache
 sentence-transformers
 langchain-text-splitters
+langchain-community
+langchain-huggingface
