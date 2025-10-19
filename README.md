@@ -9,7 +9,9 @@ Files:
  - config/aai_520_proj.config Project configuration (API keys, model, etc.)
  - utils/llm_integration.py   LLM configuration
  - utils/utils.py             Load environment variables
+ - utils/logger.py            Logging tool to log interaction between agents
  - agents/*.py                Planner, Toolbox(News, Earnings, Market), Prompt chaining, Routing, Evaluator agents
+ - evaluation/evaluator.py    Grador agent
 
 Setup:
  1. Create a virtual environment
@@ -19,6 +21,7 @@ Setup:
  5. Get the "NEWS_API_KEY" API Token from https://newsapi.org/
  6. Get the "FRED_API_KEY" API Token from https://fred.stlouisfed.org/docs/api/api_key.html
  7. Get the "GOOGLE_API_KEY" token from https://console.google.com/. Menu : API & Service --> Credentials. Click on Create Credential button. Select "Application Restriction" to None and API Restriction to "Don't Restrict any API".
+ 8. Get the "OPENAI_API_KEY" from https://platform.openai.com/api-keys
 
 Run in command line:
 `python3 main.py`
